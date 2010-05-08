@@ -18,7 +18,6 @@ class Sslfun
     @cert = 'ca_crt.pem'
     @csr_file = 'ca.csr'
     @serial_file = 'serial'
-    @makefile = 'Makefile'
     @conf = 'openssl.cnf'
     @bundle= 'ca-bundle.pem'
 
@@ -78,6 +77,10 @@ class Sslfun
     end
   end
 
+  #
+  # specify the root cert to sign your cert req
+  #   - there are some pretty specific requirements for when 
+  #       all of the cert files need to be stored.
   def sign_certs(ca, root)
     FileUtils.cd(root) do |d|
       conf = "-config #{@conf}"
@@ -90,24 +93,30 @@ class Sslfun
     end
   end
 
+
+  #
+  # creates a single file by concating all of the trusted certs together
+  #
   def create_bundle()
-    `cat **/ca-cert.pem > #{@bundle}` 
+    `cat **/#{@cert} > #{@bundle}` 
   end
 
-  def ssl_certs(hosts)
-    hosts.each do |ca, host|
-      FileUtils.mkdir(host) unless File.exists? host
-      generate_openssl_cnf(host, "#{host}/#{@conf}", is_ca=false)
-      FileUtils.cd(host) do |dir1|
-        FileUtils.mkdir('newcerts') unless File.exists? 'newcerts'
-        `openssl req -new -nodes -newkey rsa:2048 -keyout #{host}.key.pem -config #{@conf} -out #{host}.csr`
-        FileUtils.cp("#{host}.csr",  "../#{ca}")
-        FileUtils.cd "../#{ca}" do |d|
-          `make sign`
-        end
+  #
+  # gen non-CA keys and have them signed by the CA
+  #
+  def gen_ssl_certs(ca, host)
+    FileUtils.mkdir(host) unless File.exists? host
+    generate_openssl_cnf(host, "#{host}/#{@conf}", is_ca=false)
+    gen_req(host)
+    sign_certs(host, ca)
+      #FileUtils.cd(host) do |dir1|
+      #  FileUtils.mkdir('newcerts') unless File.exists? 'newcerts'
+      #  `openssl req -new -nodes -newkey rsa:2048 -keyout #{host}.key.pem -config #{@conf} -out #{host}.csr`
+      #  FileUtils.cp("#{host}.csr",  "../#{ca}")
+      #  FileUtils.cd "../#{ca}" do |d|
+      #    `make sign`
+      #  end
         #`openssl ca -batch -config ../#{ca}/#{@conf} -in #{host}.csr -out #{host}.cert -keyfile ../#{ca}/#{@prv_key} -cert ../#{ca}/ca-cert.pem`
-      end
-    end
   end
 
 
@@ -140,17 +149,16 @@ ca_root = 'ca_root'
 fun = Sslfun.new(opts)
 
 # create root CA
-#fun.ca_init(ca_root)
-#fun.self_sign_ca(ca_root)
+fun.ca_init(ca_root)
+fun.self_sign_ca(ca_root)
 # create secondary CAs
 masters.each do |k, v|
   fun.ca_init(k)
   fun.gen_req(k)
   fun.sign_certs(k, ca_root)
+  fun.gen_ssl_certs(k,v)
 end
 
-
-#fun.gen_req(masters.keys)
-#fun.sign_certs(ca_root, masters.keys)
+fun.create_bundle
 #fun.ssl_certs(masters)
 #fun.puppet_conf_ssl(masters['ca1'], 'ca1')
