@@ -9,12 +9,20 @@ require 'erb'
 class Sslfun 
 
   def initialize(opts)
-    @prv_key = 'private/ca-key.pem'
-    @csr = 'ca.csr'
+    @prv_key_dir = 'private'
+    @crl_dir = 'crl'
+    @signed_cert_dir = 'signed'
+    @req_dir = 'requests'
+
+    @prv_key = "#{@prv_key_dir}/ca-key.pem"
+    @csr_file = 'ca.csr'
+    @serial_file = 'serial'
     @makefile = 'Makefile'
     @conf = 'openssl.cnf'
     @bundle= 'ca-bundle.pem'
+
     @conf_erb = "#{@conf}.erb"
+
     @country = opts[:country] || 'US'
     @state = opts[:state]
     @city = opts[:city]
@@ -29,18 +37,35 @@ class Sslfun
     end
   end
 
-  def init_certs(ca_2s, ca_root)
-    cas = ca_2s + ca_root.to_a
-    cas.each do |ca|
-      FileUtils.mkdir ca unless File.exists? ca
-      FileUtils.cp(@makefile, ca)
-      generate_openssl_cnf(ca, "#{ca}/#{@conf}")
-      FileUtils.cd(ca) do |dir|
-        `make init`
+  #
+  # set up dir for CA
+  #
+  def ca_init(dir)
+    FileUtils.mkdir dir unless File.exists? dir
+    # I am not sure if we need this openssl.cnf file
+    generate_openssl_cnf(dir, "#{dir}/#{@conf}")
+    FileUtils.cd(dir) do |d|
+      unless File.exists? @serial_file
+        File.open(@serial_file, 'w') do |fh|
+          fh.print '01'
+        end
+        FileUtils.mkdir([@crl_dir, @signed_cert_dir, @req_dir, @prv_key_dir]) 
+        FileUtils.chmod(0770, @prv_key_dir) 
+        # touch index
+        # this is what make init does : `openssl req -nodes -config openssl.cnf -days 1825 -x509 -newkey rsa:2048 -out ca-cert.pem -outform PEM`
       end
     end
   end
 
+  def self_sign_ca(dir)
+    FileUtils.cd(dir) do |dir|
+      `openssl req -nodes -config #{@conf} -days 1825 -x509 -newkey rsa:2048 -out ca-cert.pem -outform PEM` 
+    end
+  end
+    
+  #
+  # generates cert requests
+  #
   def gen_req(cas)
     cas.each do |ca|
       FileUtils.cd(ca) do |dir|
@@ -81,7 +106,7 @@ class Sslfun
     host_prv_key = "#{host}/#{host}.key.pem"
     host_cert = "#{ca}/#{host}.pem"
     host_pub = "#{host}/"
-    ca_prv_key = "#{ca}/private/ca-key.pem"
+    ca_prv_key = "#{ca}/#{prv_key}"
     ca_cert = "#{ca}/ca.cert"
     ca_pub = "#{ca}/"
     template = ERB.new(File.read('puppet.conf.erb'))
@@ -103,8 +128,17 @@ masters = {'ca1' => 'puppetserver1', 'ca2' => 'puppetserver2'}
 ca_root = 'ca_root'
 
 fun = Sslfun.new(opts)
-#fun.init_certs(masters.keys, ca_root)
+
+# create root CA
+fun.ca_init(ca_root)
+fun.self_sign_ca(ca_root)
+# create secondary CAs
+masters.each do |k, v|
+  fun.ca_init(k)
+end
+
+
 #fun.gen_req(masters.keys)
 #fun.sign_certs(ca_root, masters.keys)
 #fun.ssl_certs(masters)
-fun.puppet_conf_ssl(masters['ca1'], 'ca1')
+#fun.puppet_conf_ssl(masters['ca1'], 'ca1')
