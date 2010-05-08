@@ -9,12 +9,11 @@ require 'erb'
 class Sslfun 
 
   def initialize(opts)
-    @prv_key_dir = 'private'
     @crl_dir = 'crl'
     @signed_cert_dir = 'signed'
     @req_dir = 'requests'
 
-    @prv_key = "#{@prv_key_dir}/ca-key.pem"
+    @prv_key = "ca_key.pem"
     @csr_file = 'ca.csr'
     @serial_file = 'serial'
     @makefile = 'Makefile'
