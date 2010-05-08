@@ -107,11 +107,11 @@ string_mask = nombstr
 
 [ root_ca_distinguished_name ]
 commonName = <%= cname %>
-countryName = <%= country %>
-stateOrProvinceName = <%= state %>
-localityName = <%= city %>
-organizationName = <%= org %>
-organizationalUnitName = <%= unit %>
+countryName = <%= @country %>
+stateOrProvinceName = <%= @state %>
+localityName = <%= @city %>
+organizationName = <%= @org %>
+organizationalUnitName = <%= @unit %>
 
 [ usr_cert ]
 

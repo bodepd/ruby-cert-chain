@@ -8,65 +8,62 @@ require 'erb'
 #
 class Sslfun 
 
-  @prv_key='private/ca-key.pem'
-  @csr='ca.csr'
-  @makefile = 'Makefile'
-  @conf='openssl.cnf'
-  @conf_erb="#{@conf}.erb"
+  def initialize(opts)
+    @prv_key = 'private/ca-key.pem'
+    @csr = 'ca.csr'
+    @makefile = 'Makefile'
+    @conf = 'openssl.cnf'
+    @conf_erb = "#{@conf}.erb"
+    @country = opts[:country] || 'US'
+    @state = opts[:state]
+    @city = opts[:city]
+    @org = opts[:org]
+    @unit = opts[:unit] || 'gunit'
+  end
 
-  def self.init_certs(cas, ca_root)
-    country = 'US'
-    state = 'Oregon'
-    city = 'Portland'
-    org = 'Puppetlabs'
-    unit = 'PS'
+  def generate_openssl_cnf(cname, outfile, is_ca=true, conf_erb=@conf_erb)
+    template = ERB.new(File.read(conf_erb))
+    File.open(outfile, 'w') do |fh|
+      fh.write(template.result(binding))
+    end
+  end
 
+  def init_certs(ca_2s, ca_root)
+    cas = ca_2s + ca_root.to_a
     cas.each do |ca|
-      is_ca = 'true'
       FileUtils.mkdir ca unless File.exists? ca
-      FileUtils.cp([@conf_erb, @makefile], ca)
+      FileUtils.cp(@makefile, ca)
+      generate_openssl_cnf(ca, "#{ca}/#{@conf}")
       FileUtils.cd(ca) do |dir|
-        cname = ca
-        template = ERB.new(File.read(@conf_erb))
-        File.open(@conf, 'w') do |fh|
-          fh.write(template.result(binding))
-        end
         `make init`
-        unless ca == ca_root
-          `openssl req -new -nodes -key #{@prv_key} -config #{@conf} -out #{@csr}`
-        end
       end
     end
   end
 
+  def gen_req(cas)
+    cas.each do |ca|
+      FileUtils.cd(ca) do |dir|
+        `openssl req -new -nodes -key #{@prv_key} -config #{@conf} -out #{@csr}`
+      end
+    end
+  end
 
-  def self.sign_certs(root, ca_2)
+  def sign_certs(root, ca_2)
     FileUtils.cd(root) do |dir|
       ca_2.each do |ca|
         FileUtils.cp("../#{ca}/#{@csr}", "#{ca}.csr")
-        `openssl ca -config #{@conf} -extfile #{@conf} -extensions v3_ca -in #{ca}.csr -out ../#{ca}/ca-cert.pem`
+        `openssl ca -batch -config #{@conf} -extfile #{@conf} -extensions v3_ca -in #{ca}.csr -out ../#{ca}/ca-cert.pem`
       end 
     end  
     `cat **/ca-cert.pem > ca-bundle.pem` 
   end
 
-  def self.ssl_certs(hosts)
-    country = 'US'
-    state = 'Oregon'
-    city = 'Portland'
-    org = 'Puppetlabs'
-    unit = 'PS'
+  def ssl_certs(hosts)
     hosts.each do |ca, host|
-      is_ca='false'
       FileUtils.mkdir(host) unless File.exists? host
-      FileUtils.cp(@conf_erb, host)
+      generate_openssl_cnf(host, "#{host}/#{@conf}", is_ca=false)
       FileUtils.cd(host) do |dir1|
         FileUtils.mkdir('newcerts') unless File.exists? 'newcerts'
-        cname = host
-        template = ERB.new(File.read(@conf_erb))
-        File.open(@conf, 'w') do |fh|
-          fh.write(template.result(binding))
-        end
         `openssl req -new -nodes -newkey rsa:2048 -keyout #{host}.key.pem -config #{@conf} -out #{host}.csr`
         FileUtils.cp("#{host}.csr",  "../#{ca}")
         FileUtils.cd "../#{ca}" do |d|
@@ -78,10 +75,18 @@ class Sslfun
   end
 end
 
-
+opts = {
+  :country => 'US',
+  :state => 'Oregon',
+  :city => 'Portland',
+  :org => 'Puppetlabs',
+  :unit => 'PS'
+}
 masters = {'ca1' => 'puppetserver1', 'ca2' => 'puppetserver2'} 
 ca_root = 'ca_root'
-cas = masters.keys + ca_root.to_a
-#Sslfun.init_certs(cas, ca_root)
-#Sslfun.sign_certs(ca_root, masters.keys)
-Sslfun.ssl_certs(masters)
+
+fun = Sslfun.new(opts)
+fun.init_certs(masters.keys, ca_root)
+fun.gen_req(masters.keys)
+fun.sign_certs(ca_root, masters.keys)
+fun.ssl_certs(masters)
