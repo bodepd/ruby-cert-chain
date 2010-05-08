@@ -13,6 +13,7 @@ class Sslfun
     @csr = 'ca.csr'
     @makefile = 'Makefile'
     @conf = 'openssl.cnf'
+    @bundle= 'ca-bundle.pem'
     @conf_erb = "#{@conf}.erb"
     @country = opts[:country] || 'US'
     @state = opts[:state]
@@ -55,7 +56,7 @@ class Sslfun
         `openssl ca -batch -config #{@conf} -extfile #{@conf} -extensions v3_ca -in #{ca}.csr -out ../#{ca}/ca-cert.pem`
       end 
     end  
-    `cat **/ca-cert.pem > ca-bundle.pem` 
+    `cat **/ca-cert.pem > #{@bundle}` 
   end
 
   def ssl_certs(hosts)
@@ -73,6 +74,22 @@ class Sslfun
       end
     end
   end
+
+
+  def puppet_conf_ssl(host, ca)
+    ssldir = `pwd`
+    host_prv_key = "#{host}/#{host}.key.pem"
+    host_cert = "#{ca}/#{host}.pem"
+    host_pub = "#{host}/"
+    ca_prv_key = "#{ca}/private/ca-key.pem"
+    ca_cert = "#{ca}/ca.cert"
+    ca_pub = "#{ca}/"
+    template = ERB.new(File.read('puppet.conf.erb'))
+    File.open('puppet.conf', 'w') do |fh|
+      fh.write(template.result(binding))
+    end
+  end
+
 end
 
 opts = {
@@ -86,7 +103,8 @@ masters = {'ca1' => 'puppetserver1', 'ca2' => 'puppetserver2'}
 ca_root = 'ca_root'
 
 fun = Sslfun.new(opts)
-fun.init_certs(masters.keys, ca_root)
-fun.gen_req(masters.keys)
-fun.sign_certs(ca_root, masters.keys)
-fun.ssl_certs(masters)
+#fun.init_certs(masters.keys, ca_root)
+#fun.gen_req(masters.keys)
+#fun.sign_certs(ca_root, masters.keys)
+#fun.ssl_certs(masters)
+fun.puppet_conf_ssl(masters['ca1'], 'ca1')

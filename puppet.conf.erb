@@ -1,0 +1,22 @@
+[main]
+    vardir = /var/lib/puppet
+    logdir = /var/log/puppet
+    rundir = /var/run/puppet
+    ssldir = <%= ssldir %>
+[puppetd]
+    classfile = $vardir/classes.txt
+    localconfig = $vardir/localconfig
+    certname=mypuppetclient
+    server=mypuppetmaster
+[puppetmasterd]
+    certname=mypuppetmaster
+    ca=true
+[certificates]
+  localcacert = $ssldir/<%= @bundle %>
+  hostprivkey = $ssldir/<%= host_prv_key %>
+  hostcert = $ssldir/<% host_cert %>
+  hostpubkey = $publickeydir/<%= host_pub %>
+[ca]
+  cacert = $ssldir/<%= ca_cert %>
+  cakey = $ssldir/<%= ca_prv_key %>
+  capub = $ssldir/<%= ca_pub %>
