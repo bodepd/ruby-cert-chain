@@ -50,14 +50,19 @@ class Sslfun
         File.open(@serial_file, 'w') do |fh|
           fh.print '01'
         end
-        FileUtils.mkdir([@crl_dir, @signed_cert_dir, @req_dir, @prv_key_dir]) 
+        FileUtils.mkdir([@crl_dir, @signed_cert_dir, @req_dir, @prv_key_dir, 'newcerts']) 
         FileUtils.chmod(0770, @prv_key_dir) 
+        FileUtils.touch('index')
         # touch index
         # this is what make init does : `openssl req -nodes -config openssl.cnf -days 1825 -x509 -newkey rsa:2048 -out ca-cert.pem -outform PEM`
       end
     end
   end
 
+  #
+  # create and self-sign a new CA
+  #
+  #
   def self_sign_ca(dir)
     FileUtils.cd(dir) do |dir|
       `openssl req -nodes -config #{@conf} -days 1825 -x509 -newkey rsa:2048 -out #{@cert} -keyout #{@prv_key} -outform PEM` 
@@ -67,21 +72,25 @@ class Sslfun
   #
   # generates cert requests
   #
-  def gen_req(cas)
-    cas.each do |ca|
-      FileUtils.cd(ca) do |dir|
-        `openssl req -new -nodes -key #{@prv_key} -config #{@conf} -out #{@csr}`
-      end
+  def gen_req(ca)
+    FileUtils.cd(ca) do |dir|
+      `openssl req -new -nodes -newkey rsa:2048 -keyout #{@prv_key} -config #{@conf} -out #{@csr_file}`
     end
   end
 
-  def sign_certs(root, ca_2)
-    FileUtils.cd(root) do |dir|
-      ca_2.each do |ca|
-        FileUtils.cp("../#{ca}/#{@csr}", "#{ca}.csr")
-        `openssl ca -batch -config #{@conf} -extfile #{@conf} -extensions v3_ca -in #{ca}.csr -out ../#{ca}/ca-cert.pem`
-      end 
-    end  
+  def sign_certs(ca, root)
+    FileUtils.cd(root) do |d|
+      conf = "-config #{@conf}"
+      ext = "-extfile #{@conf}"
+      key = "-keyfile #{@prv_key}"
+      ca_cert = "-cert #{@cert}" 
+      cert = "-out ../#{ca}/#{@cert}"
+      req = "-in ../#{ca}/#{@csr_file}"
+      `openssl ca -batch #{conf} #{key} #{ca_cert} #{ext} -extensions v3_ca #{req} #{cert}`
+    end
+  end
+
+  def create_bundle()
     `cat **/ca-cert.pem > #{@bundle}` 
   end
 
@@ -131,11 +140,13 @@ ca_root = 'ca_root'
 fun = Sslfun.new(opts)
 
 # create root CA
-fun.ca_init(ca_root)
-fun.self_sign_ca(ca_root)
+#fun.ca_init(ca_root)
+#fun.self_sign_ca(ca_root)
 # create secondary CAs
 masters.each do |k, v|
   fun.ca_init(k)
+  fun.gen_req(k)
+  fun.sign_certs(k, ca_root)
 end
 
 
