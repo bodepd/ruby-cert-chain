@@ -1,0 +1,7 @@
+this hackish script will slowly evolve to being something useful.
+
+It does the following:
+
+  - create a self-signed root signing ca cert
+  - creates two cas chainged from the root cert
+  - creates two signed certitficates for puppetmasters using the chained certs.
