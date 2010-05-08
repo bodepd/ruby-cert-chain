@@ -1,4 +1,9 @@
-this hackish script will slowly evolve to being something useful.
+This is not useful, yet. But maybe someday it will be.
+
+It basically follows Jeff McCune's (hi Jeff!) instructions:
+ http://projects.puppetlabs.com/projects/puppet/wiki/Multiple_Certificate_Authorities 
+
+this hackish script will slowly evolve to being something useful. I am prediting that I will have to set up Chained-Certs for customers at some point in the future.
 
 It does the following:
 
