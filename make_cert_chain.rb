@@ -12,8 +12,10 @@ class Sslfun
     @crl_dir = 'crl'
     @signed_cert_dir = 'signed'
     @req_dir = 'requests'
+    @prv_key_dir = 'private'
 
     @prv_key = "ca_key.pem"
+    @cert = 'ca_crt.pem'
     @csr_file = 'ca.csr'
     @serial_file = 'serial'
     @makefile = 'Makefile'
@@ -58,7 +60,7 @@ class Sslfun
 
   def self_sign_ca(dir)
     FileUtils.cd(dir) do |dir|
-      `openssl req -nodes -config #{@conf} -days 1825 -x509 -newkey rsa:2048 -out ca-cert.pem -outform PEM` 
+      `openssl req -nodes -config #{@conf} -days 1825 -x509 -newkey rsa:2048 -out #{@cert} -keyout #{@prv_key} -outform PEM` 
     end
   end
     
