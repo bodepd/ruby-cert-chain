@@ -15,6 +15,7 @@ class Sslfun
     @prv_key_dir = 'private'
 
     @prv_key = "ca_key.pem"
+    @pub_key = 'ca_pub.pem'
     @cert = 'ca_crt.pem'
     @csr_file = 'ca.csr'
     @serial_file = 'serial'
@@ -64,7 +65,8 @@ class Sslfun
   #
   def self_sign_ca(dir)
     FileUtils.cd(dir) do |dir|
-      `openssl req -nodes -config #{@conf} -days 1825 -x509 -newkey rsa:2048 -out #{@cert} -keyout #{@prv_key} -outform PEM` 
+      puts "openssl req -nodes -config #{@conf} -days 1825 -x509 -newkey rsa:2048 -out #{@cert} -keyout #{@prv_key} -pubkey #{@pub_key} -outform PEM" 
+      `openssl req -nodes -config #{@conf} -days 1825 -x509 -newkey rsa:2048 -out #{@cert} -keyout #{@prv_key} -pubkey -outform PEM` 
     end
   end
     
@@ -124,10 +126,10 @@ class Sslfun
     ssldir = `pwd`
     host_prv_key = "#{host}/#{host}.key.pem"
     host_cert = "#{ca}/#{host}.pem"
-    host_pub = "#{host}/"
+    host_pub = "#{host}/#{@pub_key}"
     ca_prv_key = "#{ca}/#{prv_key}"
     ca_cert = "#{ca}/ca.cert"
-    ca_pub = "#{ca}/"
+    ca_pub = "#{ca}/#{@pub_key}"
     template = ERB.new(File.read('puppet.conf.erb'))
     File.open('puppet.conf', 'w') do |fh|
       fh.write(template.result(binding))
@@ -148,17 +150,34 @@ ca_root = 'ca_root'
 
 fun = Sslfun.new(opts)
 
-# create root CA
-fun.ca_init(ca_root)
-fun.self_sign_ca(ca_root)
-# create secondary CAs
-masters.each do |k, v|
-  fun.ca_init(k)
-  fun.gen_req(k)
-  fun.sign_certs(k, ca_root)
-  fun.gen_ssl_certs(k,v)
-end
+task = ARGV[0] || 'gen'
 
-fun.create_bundle
-#fun.ssl_certs(masters)
+if task =~ /gen/
+  # create root CA
+  fun.ca_init(ca_root)
+  fun.self_sign_ca(ca_root)
+  # create secondary CAs
+  masters.each do |k, v|
+    fun.ca_init(k)
+    fun.gen_req(k)
+    fun.sign_certs(k, ca_root)
+    fun.gen_ssl_certs(k,v)
+  end
+
+  fun.create_bundle
+elsif task =~ /clean/
+  masters.each do |k, v|
+    if k && v
+      FileUtils.rm_rf k
+      FileUtils.rm_rf v
+    else
+      puts 'I will not wipe out all my work!!'
+    end
+  end
+  if ca_root
+    FileUtils.rm_rf ca_root
+  else
+    puts 'I will not wipe out all my work!!'
+  end
+end
 #fun.puppet_conf_ssl(masters['ca1'], 'ca1')
