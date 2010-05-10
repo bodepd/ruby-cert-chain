@@ -22,6 +22,10 @@ class Sslfun
     @conf = 'openssl.cnf'
     @bundle= 'ca-bundle.pem'
 
+    @ssl_certs = 'cert'
+    @ssl_prv_keys = 'private_keys'
+    @ssl_pub_keys = 'public_keys'
+
     @conf_erb = "#{@conf}.erb"
 
     @country = opts[:country] || 'US'
@@ -91,6 +95,7 @@ class Sslfun
       ca_cert = "-cert #{@cert}" 
       cert = "-out ../#{ca}/#{@cert}"
       req = "-in ../#{ca}/#{@csr_file}"
+      puts "openssl ca -batch #{conf} #{key} #{ca_cert} #{ext} -extensions v3_ca #{req} #{cert}"
       `openssl ca -batch #{conf} #{key} #{ca_cert} #{ext} -extensions v3_ca #{req} #{cert}`
     end
   end
@@ -108,9 +113,14 @@ class Sslfun
   #
   def gen_ssl_certs(ca, host)
     FileUtils.mkdir(host) unless File.exists? host
+    FileUtils.mkdir("#{host}/certs") unless File.exists? "#{host}/certs"
+    FileUtils.mkdir("#{host}/private_keys") unless File.exists? "#{host}/private_keys"
+    FileUtils.mkdir("#{host}/public_keys") unless File.exists? "#{host}/publib_keys"
     generate_openssl_cnf(host, "#{host}/#{@conf}", is_ca=false)
     gen_req(host)
     sign_certs(host, ca)
+    FileUtils.cp("#{host}/#{@prv_key}", "#{host}/private_keys/#{host}.pem")
+    FileUtils.cp("#{host}/#{@cert}", "#{host}/certs/#{host}.pem")
       #FileUtils.cd(host) do |dir1|
       #  FileUtils.mkdir('newcerts') unless File.exists? 'newcerts'
       #  `openssl req -new -nodes -newkey rsa:2048 -keyout #{host}.key.pem -config #{@conf} -out #{host}.csr`
@@ -145,13 +155,14 @@ opts = {
   :org => 'Puppetlabs',
   :unit => 'PS'
 }
-masters = {'ca1' => 'puppetserver1', 'ca2' => 'puppetserver2'} 
+masters = {'ca1' => 'mypuppetmaster', 'ca2' => 'puppetserver2'} 
 ca_root = 'ca_root'
 
 fun = Sslfun.new(opts)
 
 task = ARGV[0] || 'gen'
 
+# by default create all of the CERT dirs.
 if task =~ /gen/
   # create root CA
   fun.ca_init(ca_root)
@@ -159,12 +170,15 @@ if task =~ /gen/
   # create secondary CAs
   masters.each do |k, v|
     fun.ca_init(k)
+    # generate csr's for CA
     fun.gen_req(k)
+    # have root_ca sign
     fun.sign_certs(k, ca_root)
+    # make puppet master ssl certs
     fun.gen_ssl_certs(k,v)
   end
-
   fun.create_bundle
+# task to clean our dir
 elsif task =~ /clean/
   masters.each do |k, v|
     if k && v
@@ -179,5 +193,6 @@ elsif task =~ /clean/
   else
     puts 'I will not wipe out all my work!!'
   end
+  FileUtils.rm('ca-bundle.pem')
 end
 #fun.puppet_conf_ssl(masters['ca1'], 'ca1')
