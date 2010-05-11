@@ -110,6 +110,8 @@ class Sslfun
 
   #
   # gen non-CA keys and have them signed by the CA
+  # after we set up the keys, I will copy in the CA file.
+  #
   #
   def gen_ssl_certs(ca, host)
     FileUtils.mkdir(host) unless File.exists? host
@@ -121,6 +123,8 @@ class Sslfun
     sign_certs(host, ca)
     FileUtils.cp("#{host}/#{@prv_key}", "#{host}/private_keys/#{host}.pem")
     FileUtils.cp("#{host}/#{@cert}", "#{host}/certs/#{host}.pem")
+    FileUtils.cp_r(ca, "#{host}/ca")
+    FileUtils.cp('ca-bundle.pem', "#{host}/certs/ca.pem")
       #FileUtils.cd(host) do |dir1|
       #  FileUtils.mkdir('newcerts') unless File.exists? 'newcerts'
       #  `openssl req -new -nodes -newkey rsa:2048 -keyout #{host}.key.pem -config #{@conf} -out #{host}.csr`
@@ -174,10 +178,13 @@ if task =~ /gen/
     fun.gen_req(k)
     # have root_ca sign
     fun.sign_certs(k, ca_root)
+  end
+  # create the key store for the trusted certs
+  fun.create_bundle
+  masters.each do |k,v|
     # make puppet master ssl certs
     fun.gen_ssl_certs(k,v)
   end
-  fun.create_bundle
 # task to clean our dir
 elsif task =~ /clean/
   masters.each do |k, v|
